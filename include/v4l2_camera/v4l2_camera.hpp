@@ -142,6 +142,7 @@ private:
 
 #ifdef ENABLE_CUDA
   // Memory region to communicate with GPU
+  bool has_cuda_device_{false};
   std::allocator<GPUMemoryManager> allocator_;
   std::shared_ptr<GPUMemoryManager> src_dev_;
   std::shared_ptr<GPUMemoryManager> dst_dev_;

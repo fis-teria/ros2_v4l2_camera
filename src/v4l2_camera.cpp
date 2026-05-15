@@ -37,6 +37,7 @@
 
 #ifdef ENABLE_CUDA
 #include <cuda.h>
+#include <cuda_runtime_api.h>
 #include <nppi_color_conversion.h>
 #endif
 
@@ -230,8 +231,22 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
 
   cinfo_ = std::make_shared<camera_info_manager::CameraInfoManager>(this, camera_->getCameraName());
 #ifdef ENABLE_CUDA
-  src_dev_ = std::allocate_shared<GPUMemoryManager>(allocator_);
-  dst_dev_ = std::allocate_shared<GPUMemoryManager>(allocator_);
+  int cuda_device_count = 0;
+  const auto cuda_status = cudaGetDeviceCount(&cuda_device_count);
+  has_cuda_device_ = cuda_status == cudaSuccess && cuda_device_count > 0;
+  if (has_cuda_device_) {
+    RCLCPP_INFO(
+      get_logger(), "CUDA image conversion enabled with %d CUDA-capable device(s)",
+      cuda_device_count);
+    src_dev_ = std::allocate_shared<GPUMemoryManager>(allocator_);
+    dst_dev_ = std::allocate_shared<GPUMemoryManager>(allocator_);
+  } else {
+    RCLCPP_WARN(
+      get_logger(),
+      "CUDA support was built, but no CUDA-capable device is available (%s); "
+      "falling back to CPU image conversion",
+      cudaGetErrorString(cuda_status));
+  }
 #endif
 
   // Read parameters and set up callback
@@ -323,7 +338,7 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
         auto stamp = img->header.stamp;
         if (img->encoding != output_encoding_) {
 #ifdef ENABLE_CUDA
-          img = convertOnGpu(*img);
+          img = has_cuda_device_ ? convertOnGpu(*img) : convert(*img);
 #else
           img = convert(*img);
 #endif
