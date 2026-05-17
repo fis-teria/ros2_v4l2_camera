@@ -32,6 +32,7 @@
 #include <vector>
 #include <optional>
 #include <mutex>
+#include <chrono>
 
 
 #include "v4l2_camera/visibility_control.h"
@@ -119,9 +120,8 @@ private:
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr on_set_parameters_callback_;
 
   double publish_rate_;
-  rclcpp::TimerBase::SharedPtr image_pub_timer_;
-
-  bool publish_next_frame_;
+  std::chrono::nanoseconds publish_period_;
+  std::chrono::steady_clock::time_point next_publish_time_;
   bool use_image_transport_;
 
   std::shared_ptr<diagnostic_updater::Updater> diag_updater_;

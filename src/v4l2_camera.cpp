@@ -150,12 +150,12 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
     publish_rate_ = -1.0;
   }
   if(publish_rate_ > 0){
-    const auto publish_period = rclcpp::Rate(publish_rate_).period();
-    image_pub_timer_ = this->create_wall_timer(publish_period, [this](){this->publish_next_frame_=true;});
-    publish_next_frame_ = false;
+    publish_period_ = rclcpp::Rate(publish_rate_).period();
+    next_publish_time_ = std::chrono::steady_clock::now();
   }
   else{
-    publish_next_frame_ = true;
+    publish_period_ = std::chrono::nanoseconds{0};
+    next_publish_time_ = std::chrono::steady_clock::time_point{};
   }
   const auto qos = use_sensor_data_qos ? rclcpp::SensorDataQoS() : rclcpp::QoS(10);
 
@@ -331,8 +331,16 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
           std::this_thread::sleep_for(std::chrono::milliseconds(10));
           continue;
         }
-        if(publish_next_frame_ == false){
-          continue;
+        if(publish_rate_ > 0) {
+          const auto now = std::chrono::steady_clock::now();
+          if (now < next_publish_time_) {
+            continue;
+          }
+          if (now - next_publish_time_ > publish_period_) {
+            next_publish_time_ = now + publish_period_;
+          } else {
+            next_publish_time_ += publish_period_;
+          }
         }
 
         auto stamp = img->header.stamp;
@@ -355,7 +363,6 @@ V4L2Camera::V4L2Camera(rclcpp::NodeOptions const & options)
 
         ci->header.stamp = stamp;
         ci->header.frame_id = camera_frame_id_;
-        publish_next_frame_ = publish_rate_ < 0;
 
         if (use_image_transport_) {
           camera_transport_pub_.publish(*img, *ci);
